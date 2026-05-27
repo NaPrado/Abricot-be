@@ -402,6 +402,22 @@ if ! is_real_id "${account_id}"; then
   exit 1
 fi
 
+echo "Scrubbing state of resources from previous AWS accounts..."
+for address in $(terraform state list 2>/dev/null || true); do
+  id="$(terraform state show -no-color "${address}" 2>/dev/null | grep -E '^[[:space:]]*(id|arn)[[:space:]]*=' | head -n 1 | awk -F'"' '{print $2}')"
+  if [[ "${id}" =~ arn:aws[^:]*:[^:]+:[^:]*:([0-9]{12}): ]]; then
+    if [[ "${BASH_REMATCH[1]}" != "${account_id}" ]]; then
+      echo "Removing stale cross-account state for ${address} (${BASH_REMATCH[1]})"
+      terraform state rm "${address}" >/dev/null 2>&1 || true
+    fi
+  elif [[ "${id}" =~ abricot-tp3-([0-9]{12}) ]]; then
+    if [[ "${BASH_REMATCH[1]}" != "${account_id}" ]]; then
+      echo "Removing stale cross-account state for ${address} (${BASH_REMATCH[1]})"
+      terraform state rm "${address}" >/dev/null 2>&1 || true
+    fi
+  fi
+done
+
 frontend_bucket="${NAME_PREFIX}-${account_id}-frontend"
 lambda_artifacts_bucket="${NAME_PREFIX}-${account_id}-lambda-artifacts"
 cognito_domain="${NAME_PREFIX}-${account_id}"
