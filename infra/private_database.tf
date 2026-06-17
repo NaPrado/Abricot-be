@@ -414,6 +414,15 @@ resource "aws_db_proxy_default_target_group" "users" {
   }
 }
 
+# A Multi-AZ RDS instance can briefly report "available" before its host is
+# attached. RegisterDBProxyTargets run in that window fails with
+# InvalidDBInstanceState ("instance does not have any host"). This explicit wait
+# bridges that gap before proxy target registration.
+resource "time_sleep" "wait_for_db_host" {
+  depends_on      = [aws_db_instance.postgres]
+  create_duration = "120s"
+}
+
 resource "aws_db_proxy_target" "users" {
   count = local.full_private_stack_enabled ? 1 : 0
 
@@ -421,5 +430,5 @@ resource "aws_db_proxy_target" "users" {
   db_proxy_name          = aws_db_proxy.users[0].name
   target_group_name      = aws_db_proxy_default_target_group.users[0].name
 
-  depends_on = [aws_secretsmanager_secret_version.db]
+  depends_on = [aws_secretsmanager_secret_version.db, time_sleep.wait_for_db_host]
 }
